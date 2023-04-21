@@ -379,6 +379,31 @@ app.post("/create_customer", async (req, res) => {
     res.status(400).json({ error });
   }
 });
+
+app.post("/create_user", async (req, res) => {
+  const { first_name, last_name, email } = req.body;
+
+  try {
+    const result = await db.collection("users").add({
+      first_name,
+      last_name,
+      email,
+      isDeleted: false,
+      createdAt: Date.now(),
+      updateAt: Date.now(),
+    });
+
+    return res.status(200).json({
+      data: {
+        id: result.id,
+      },
+    });
+  } catch (error) {
+    console.log(error.message);
+    res.status(400).json({ error });
+  }
+});
+
 // exports.helloWorld = fcn.https.onRequest((request, response) => {
 //   functions.logger.info("Hello logs!", { structuredData: true });
 //   response.send("Hello from Firebase!");
