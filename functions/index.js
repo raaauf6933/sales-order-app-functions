@@ -199,6 +199,7 @@ app.post("/create_order", async (req, res) => {
       product_name: e.product_name,
       quanty: getOrderLine(e).quantity,
       product_selling_price: e.product_selling_price,
+      image: e.product_img_url,
       newQty: e.quantity - getOrderLine(e).quantity,
     }));
   };
@@ -235,10 +236,13 @@ app.post("/create_order", async (req, res) => {
 
   try {
     const result = await db.collection("orders").add({
+      order_id: makeid(7),
       customer,
       order_lines: orderLines,
       status: "NEW_ORDER",
       totalAmount: total_amount,
+
+      createdAt: Date.now(),
     });
 
     res.status(200).send({ data: { id: result.id } });
@@ -248,6 +252,133 @@ app.post("/create_order", async (req, res) => {
   }
 });
 
+app.post("/orders", async (req, res) => {
+  const { user_id } = req.body;
+
+  const getOrders = async (id) => {
+    if (id) {
+      const orders_result = await db
+        .collection("orders")
+        .where("customer.customer_id", "==", id)
+        .get();
+
+      let orders = [];
+      orders_result.forEach((doc) => {
+        const total_amount = doc.data().totalAmount;
+        let vat = total_amount / 1.12;
+        let vatable = total_amount - vat;
+
+        orders.push({ id: doc.id, ...doc.data(), vat, vatable });
+      });
+      return orders;
+    } else {
+      const orders_result = await db.collection("orders").get();
+
+      const orders = [];
+      orders_result.forEach((doc) => {
+        const total_amount = doc.data().totalAmount;
+        let vat = total_amount / 1.12;
+        let vatable = total_amount - vat;
+
+        orders.push({ id: doc.id, ...doc.data(), vat, vatable });
+      });
+
+      return orders;
+    }
+  };
+
+  try {
+    if (user_id) {
+      const result = await getOrders(user_id);
+      return res.status(200).json({ data: result });
+    } else {
+      const result = await getOrders();
+      return res.status(200).json({ data: result });
+    }
+  } catch (error) {
+    res.status(400).json({ error });
+  }
+});
+
+app.post("/order", async (req, res) => {
+  const id = req.body.id;
+
+  var docRef = db.collection("orders").doc(id);
+
+  docRef
+    .get()
+    .then((doc) => {
+      if (doc.exists) {
+        const total_amount = doc.data().totalAmount;
+        let vat = total_amount / 1.12;
+        let vatable = total_amount - vat;
+
+        res.status(200).json({ data: { id, ...doc.data(), vat, vatable } });
+      } else {
+        res.status(200).json({ message: "not found" });
+      }
+    })
+    .catch((error) => {
+      res.status(400).json({ error });
+    });
+});
+
+app.post("/update_order_status", async (req, res) => {
+  const { id, status } = req.body;
+
+  const getNewStatus = () => {
+    switch (status) {
+      case "NEW_ORDER":
+        return "IN_PROCESS";
+        break;
+      case "IN_PROCESS":
+        return "SHIPPED";
+        break;
+      case "SHIPPED":
+        return "COMPLETE";
+        break;
+      default:
+        return "NEW_ORDER";
+        break;
+    }
+  };
+
+  var ordersRef = db.collection("orders").doc(id);
+
+  try {
+    const result = await ordersRef.update({
+      status: getNewStatus(),
+    });
+
+    res.status(200).json({ result });
+  } catch (error) {
+    res.status(400).json({ error });
+  }
+});
+
+app.post("/create_customer", async (req, res) => {
+  const { address, contact_number, first_name, last_name, email } = req.body;
+
+  try {
+    const result = await db.collection("customers").add({
+      address,
+      contact_number,
+      first_name,
+      last_name,
+      isDeleted: false,
+      email,
+    });
+
+    return res.status(200).json({
+      data: {
+        id: result.id,
+      },
+    });
+  } catch (error) {
+    console.log(error.message);
+    res.status(400).json({ error });
+  }
+});
 // exports.helloWorld = fcn.https.onRequest((request, response) => {
 //   functions.logger.info("Hello logs!", { structuredData: true });
 //   response.send("Hello from Firebase!");
